@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Space Ecosystem Sim</title>
+
+<style>
+body{
+margin:0;
+overflow:hidden;
+background:#000;
+font-family:Arial;
+color:white;
+}
+
+/* SIDEBAR */
+#ui{
+position:absolute;
+left:10px;
+top:10px;
+width:240px;
+padding:12px;
+background:rgba(0,0,0,0.65);
+border:1px solid rgba(255,255,255,0.1);
+border-radius:12px;
+backdrop-filter: blur(10px);
+}
+
+label{
+font-size:12px;
+opacity:0.8;
+}
+
+input{
+width:100%;
+margin-bottom:10px;
+}
+
+#stats{
+font-size:13px;
+line-height:1.4em;
+margin-top:10px;
+}
+
+canvas{
+display:block;
+}
+</style>
+</head>
+
+<body>
+
+<div id="ui">
+<h3>🌌 Space Ecosystem</h3>
+
+<label>🔥 Temperature</label>
+<input id="temp" type="range" min="0" max="100" value="50">
+
+<label>🌍 Planet Size</label>
+<input id="size" type="range" min="20" max="90" value="50">
+
+<label>🌀 Orbit Speed</label>
+<input id="speed" type="range" min="1" max="20" value="6">
+
+<div id="stats"></div>
+</div>
+
+<canvas id="c"></canvas>
+
+<script>
+
+const c=document.getElementById("c");
+const ctx=c.getContext("2d");
+
+c.width=innerWidth;
+c.height=innerHeight;
+
+/* =========================
+   UI ELEMENTS
+========================= */
+
+const tempSlider=document.getElementById("temp");
+const sizeSlider=document.getElementById("size");
+const speedSlider=document.getElementById("speed");
+const stats=document.getElementById("stats");
+
+/* =========================
+   STARFIELD
+========================= */
+
+let stars=[];
+
+for(let i=0;i<250;i++){
+stars.push({
+x:Math.random()*c.width,
+y:Math.random()*c.height,
+r:Math.random()*1.5
+});
+}
+
+/* =========================
+   SUN
+========================= */
+
+const sun={
+x:c.width/2,
+y:c.height/2,
+r:60
+};
+
+/* =========================
+   PLANET DATA
+========================= */
+
+let planet={
+angle:0,
+water:20,
+life:0,
+oxygen:0,
+stage:0,
+impacts:0
+};
+
+/* =========================
+   ASTEROIDS
+========================= */
+
+let asteroids=[];
+
+function spawnAsteroid(){
+asteroids.push({
+x:Math.random()*c.width,
+y:-20,
+vx:(Math.random()-.5)*2,
+vy:2+Math.random()*3,
+r:2+Math.random()*4,
+life:200
+});
+}
+
+/* spawn loop */
+setInterval(spawnAsteroid,1200);
+
+/* =========================
+   PARTICLES
+========================= */
+
+let particles=[];
+
+function explosion(x,y,type){
+
+let count=type==="big"?40:15;
+
+for(let i=0;i<count;i++){
+particles.push({
+x,y,
+vx:(Math.random()-.5)*4,
+vy:(Math.random()-.5)*4,
+life:40+Math.random()*30,
+color:type==="water"?"#4fc3f7":
+type==="life"?"#7CFF6B":
+"#ffcc66"
+});
+}
+}
+
+/* =========================
+   DRAW FUNCTIONS
+========================= */
+
+function drawStarfield(){
+
+ctx.fillStyle="black";
+ctx.fillRect(0,0,c.width,c.height);
+
+ctx.fillStyle="white";
+
+for(let s of stars){
+ctx.globalAlpha=0.8;
+ctx.fillRect(s.x,s.y,s.r,s.r);
+}
+ctx.globalAlpha=1;
+}
+
+function drawSun(){
+
+let glow=20+Math.sin(Date.now()*0.002)*10;
+
+ctx.fillStyle="#ffb300";
+ctx.beginPath();
+ctx.arc(sun.x,sun.y,sun.r+glow,0,Math.PI*2);
+ctx.fill();
+
+ctx.fillStyle="#fff176";
+ctx.beginPath();
+ctx.arc(sun.x,sun.y,sun.r,0,Math.PI*2);
+ctx.fill();
+}
+
+/* =========================
+   PLANET COLOR EVOLUTION
+========================= */
+
+function getPlanetColor(){
+
+if(planet.life<20) return "#6b4f3a";   // dead rock
+if(planet.life<40) return "#3b7a57";   // early life
+if(planet.life<70) return "#2ecc71";   // green world
+if(planet.life<90) return "#4fc3f7";   // ocean world
+return "#b2ff59";                      // paradise
+}
+
+/* =========================
+   PLANET UPDATE
+========================= */
+
+function updatePlanet(){
+
+let temp=parseInt(tempSlider.value);
+let size=parseInt(sizeSlider.value);
+let speed=parseInt(speedSlider.value);
+
+/* orbit */
+planet.angle+=speed*0.002;
+
+let orbitX=sun.x+Math.cos(planet.angle)*180;
+let orbitY=sun.y+Math.sin(planet.angle)*180;
+
+/* temperature effect */
+let tempBalance=100-Math.abs(temp-50);
+
+/* water + life interaction */
+let habitability=
+(tempBalance*0.5)+(planet.water*0.3)+(planet.life*0.2);
+
+/* asteroid effects */
+for(let a of asteroids){
+
+let dx=a.x-orbitX;
+let dy=a.y-orbitY;
+let dist=Math.sqrt(dx*dx+dy*dy);
+
+if(dist<size){
+
+a.life=0;
+planet.impacts++;
+
+/* asteroid impact effects */
+let r=Math.random();
+
+if(r<0.4){
+planet.water+=5;
+explosion(orbitX,orbitY,"water");
+}
+
+else if(r<0.7){
+planet.life+=3;
+explosion(orbitX,orbitY,"life");
+}
+
+else{
+planet.water-=4;
+planet.life-=2;
+explosion(orbitX,orbitY,"big");
+}
+
+}
+}
+
+/* clamp values */
+planet.water=Math.max(0,Math.min(100,planet.water));
+planet.life=Math.max(0,Math.min(100,planet.life));
+
+/* natural growth */
+if(habitability>60){
+planet.life+=0.05;
+planet.water+=0.02;
+}
+
+/* decay */
+if(habitability<40){
+planet.life-=0.03;
+}
+
+/* stage evolution */
+if(planet.life>20) planet.stage=1;
+if(planet.life>40) planet.stage=2;
+if(planet.life>70) planet.stage=3;
+if(planet.life>90) planet.stage=4;
+
+/* draw orbit planet */
+drawPlanet(orbitX,orbitY,size);
+}
+
+/* =========================
+   PLANET DRAW
+========================= */
+
+function drawPlanet(x,y,size){
+
+let color=getPlanetColor();
+
+/* glow */
+ctx.fillStyle=color;
+ctx.beginPath();
+ctx.arc(x,y,size+6,0,Math.PI*2);
+ctx.fill();
+
+/* core */
+ctx.fillStyle=color;
+ctx.beginPath();
+ctx.arc(x,y,size,0,Math.PI*2);
+ctx.fill();
+
+/* small “life sparks” */
+if(planet.life>40){
+ctx.fillStyle="white";
+for(let i=0;i<5;i++){
+ctx.fillRect(
+x+(Math.random()*size-size/2),
+y+(Math.random()*size-size/2),
+2,2
+);
+}
+}
+}
+
+/* =========================
+   ASTEROIDS
+========================= */
+
+function updateAsteroids(){
+
+ctx.fillStyle="#c9a66b";
+
+for(let a of asteroids){
+
+a.x+=a.vx;
+a.y+=a.vy;
+a.life--;
+
+ctx.beginPath();
+ctx.arc(a.x,a.y,a.r,0,Math.PI*2);
+ctx.fill();
+}
+
+asteroids=asteroids.filter(a=>a.life>0);
+}
+
+/* =========================
+   PARTICLES
+========================= */
+
+function updateParticles(){
+
+for(let p of particles){
+
+p.x+=p.vx;
+p.y+=p.vy;
+p.life--;
+
+ctx.globalAlpha=p.life/60;
+ctx.fillStyle=p.color;
+
+ctx.fillRect(p.x,p.y,3,3);
+}
+
+ctx.globalAlpha=1;
+
+particles=particles.filter(p=>p.life>0);
+}
+
+/* =========================
+   UI
+========================= */
+
+function updateUI(){
+
+stats.innerHTML=`
+🌍 Life: ${planet.life.toFixed(1)}<br>
+💧 Water: ${planet.water.toFixed(1)}<br>
+☄️ Impacts: ${planet.impacts}<br>
+🌱 Stage: ${planet.stage}
+`;
+}
+
+/* =========================
+   MAIN LOOP
+========================= */
+
+function loop(){
+
+drawStarfield();
+drawSun();
+
+updatePlanet();
+updateAsteroids();
+updateParticles();
+updateUI();
+
+requestAnimationFrame(loop);
+}
+
+loop();
+
+</script>
+
+</body>
+</html>
